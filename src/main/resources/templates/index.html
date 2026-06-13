@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barber Records</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<main class="page">
+    <section class="welcome" id="stepWelcome">
+        <div class="welcome-inner">
+            <p class="eyebrow">Barber Records</p>
+            <h1>Запись на стрижку</h1>
+            <p class="subtitle">Выберите услугу, дату и время — быстро и удобно.</p>
+            <button type="button" class="btn btn-primary btn-xl" id="startBookingBtn">Записаться</button>
+        </div>
+    </section>
+
+    <section class="quiz hidden" id="quizFlow">
+        <div class="quiz-inner">
+            <div class="progress">
+                <div class="progress-step active" data-step="1">Услуга</div>
+                <div class="progress-step" data-step="2">Дата</div>
+                <div class="progress-step" data-step="3">Время</div>
+                <div class="progress-step" data-step="4">Контакты</div>
+                <div class="progress-step" data-step="5">Подтверждение</div>
+            </div>
+
+            <div class="quiz-panel" data-panel="1">
+                <h2>Выберите услугу</h2>
+                <input type="search" class="search-input" id="serviceSearch" placeholder="Поиск услуги...">
+                <div class="service-list" id="serviceList">
+                    <button type="button" class="service-item"
+                            th:each="service : ${services}"
+                            th:attr="data-id=${service.id},
+                                     data-name=${service.name},
+                                     data-duration=${service.durationMinutes},
+                                     data-price=${service.price}">
+                        <span class="service-item-name" th:text="${service.name}">Стрижка</span>
+                        <span class="service-item-meta">
+                            <span th:text="${service.durationMinutes} + ' мин'">30 мин</span>
+                            ·
+                            <span th:text="${#numbers.formatDecimal(service.price, 0, 'COMMA', 0, 'POINT')} + ' ₽'">800 ₽</span>
+                        </span>
+                    </button>
+                </div>
+                <p class="empty hidden" id="noServicesHint">Ничего не найдено</p>
+            </div>
+
+            <div class="quiz-panel hidden" data-panel="2">
+                <h2>Выберите дату</h2>
+                <div class="calendar" id="calendar"></div>
+                <input type="hidden" id="selectedDate">
+            </div>
+
+            <div class="quiz-panel hidden" data-panel="3">
+                <h2>Выберите время</h2>
+                <p class="hint" id="selectedDateLabel"></p>
+                <div class="time-slots" id="timeSlots"></div>
+                <p class="empty hidden" id="noSlotsHint">На эту дату нет свободного времени</p>
+            </div>
+
+            <div class="quiz-panel hidden" data-panel="4">
+                <h2>Ваши контакты</h2>
+                <input type="text" id="website" name="website" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
+                <label for="clientName">ФИО</label>
+                <input type="text" id="clientName" placeholder="Иванов Иван">
+
+                <label for="clientPhone">Телефон</label>
+                <input type="tel" id="clientPhone" placeholder="+7 900 000-00-00">
+            </div>
+
+            <div class="quiz-panel hidden" data-panel="5">
+                <h2>Проверьте запись</h2>
+                <div class="preview-card">
+                    <div class="preview-row"><span>Услуга</span><strong id="previewService"></strong></div>
+                    <div class="preview-row"><span>Длительность</span><strong id="previewDuration"></strong></div>
+                    <div class="preview-row"><span>Цена</span><strong id="previewPrice"></strong></div>
+                    <div class="preview-row"><span>Дата</span><strong id="previewDate"></strong></div>
+                    <div class="preview-row"><span>Время</span><strong id="previewTime"></strong></div>
+                    <div class="preview-row"><span>ФИО</span><strong id="previewName"></strong></div>
+                    <div class="preview-row"><span>Телефон</span><strong id="previewPhone"></strong></div>
+                </div>
+                <p class="success hidden" id="formSuccess"></p>
+                <button type="button" class="btn btn-primary hidden" id="homeBtn">На главную</button>
+            </div>
+
+            <p class="error hidden" id="formError"></p>
+
+            <div class="quiz-actions">
+                <button type="button" class="btn btn-ghost hidden" id="prevBtn">Назад</button>
+                <button type="button" class="btn btn-primary" id="nextBtn">Далее</button>
+                <button type="button" class="btn btn-primary hidden" id="confirmBtn">Подтвердить запись</button>
+            </div>
+        </div>
+    </section>
+</main>
+
+<script th:src="@{/js/booking.js}"></script>
+</body>
+</html>

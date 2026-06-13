@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ — Barber Records</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body class="admin-page">
+<header class="admin-header">
+    <h1>Barber Records — админ</h1>
+    <form th:action="@{/admin/logout}" method="post">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <button type="submit" class="btn btn-secondary">Выйти</button>
+    </form>
+</header>
+
+<main class="admin-main">
+    <nav class="tabs">
+        <a class="tab" th:classappend="${activeTab == 'calendar'} ? 'active'" href="/admin?tab=calendar">Календарь</a>
+        <a class="tab" th:classappend="${activeTab == 'services'} ? 'active'" href="/admin?tab=services">Услуги</a>
+        <a class="tab" th:classappend="${activeTab == 'settings'} ? 'active'" href="/admin?tab=settings">Дополнительно</a>
+    </nav>
+
+    <section class="tab-panel" th:if="${activeTab == 'calendar'}">
+        <input type="hidden" id="csrfToken" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+        <div class="view-switch">
+            <button type="button" class="view-btn active" data-mode="calendar">Календарь</button>
+            <button type="button" class="view-btn" data-mode="period">За период</button>
+        </div>
+
+        <div id="calendarMode">
+            <div class="calendar-controls">
+                <button type="button" class="btn btn-ghost btn-sm" id="monthPrev">&larr;</button>
+                <span class="calendar-title" id="monthTitle"></span>
+                <button type="button" class="btn btn-ghost btn-sm" id="monthNext">&rarr;</button>
+            </div>
+            <div id="adminCalendar"></div>
+        </div>
+
+        <div id="periodMode" class="hidden">
+            <div class="calendar-controls">
+                <label>С</label>
+                <input type="date" id="periodFrom">
+                <label>По</label>
+                <input type="date" id="periodTo">
+                <button type="button" class="btn btn-primary btn-sm" id="periodShowBtn">Показать</button>
+            </div>
+            <div id="periodBookings"></div>
+        </div>
+
+        <div id="detailPanel" class="detail-panel hidden">
+            <div class="detail-panel-header">
+                <h3 id="detailTitle"></h3>
+                <button type="button" class="btn btn-secondary btn-sm" id="showAvailableBtn">Доступные записи</button>
+            </div>
+            <div id="detailBookings" class="booking-list"></div>
+        </div>
+
+        <div id="availablePanel" class="detail-panel hidden">
+            <h3>Доступные окна</h3>
+            <label for="availableServiceSelect">Услуга</label>
+            <select id="availableServiceSelect" class="select-input"></select>
+            <div id="availableSlotsResult" class="available-slots-result"></div>
+            <div class="share-actions hidden" id="shareActions">
+                <button type="button" class="btn btn-primary" id="sharePdfBtn">Поделиться PDF</button>
+                <button type="button" class="btn btn-secondary" id="downloadPdfBtn">Скачать PDF</button>
+            </div>
+        </div>
+    </section>
+
+    <script th:inline="javascript">
+        window.ADMIN_SERVICES = /*[[${activeServices}]]*/ [];
+    </script>
+
+    <section class="tab-panel" th:if="${activeTab == 'services'}">
+        <h2>Добавить услугу</h2>
+        <form class="grid-form" th:action="@{/admin/services}" method="post" th:object="${serviceForm}">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <div>
+                <label>Название</label>
+                <input type="text" th:field="*{name}" required>
+            </div>
+            <div>
+                <label>Длительность (мин)</label>
+                <input type="number" th:field="*{durationMinutes}" min="1" required>
+            </div>
+            <div>
+                <label>Цена (₽)</label>
+                <input type="number" th:field="*{price}" min="0" step="0.01" required>
+            </div>
+            <div class="checkbox-field">
+                <label><input type="checkbox" th:field="*{active}"> Активна</label>
+            </div>
+            <div>
+                <button type="submit" class="btn btn-primary">Добавить</button>
+            </div>
+        </form>
+
+        <h2>Список услуг</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Длительность</th>
+                    <th>Цена</th>
+                    <th>Статус</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="service : ${services}">
+                    <td>
+                        <form th:action="@{/admin/services/{id}(id=${service.id})}" method="post" class="inline-form">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <input type="text" name="name" th:value="${service.name}" required>
+                    </td>
+                    <td>
+                            <input type="number" name="durationMinutes" th:value="${service.durationMinutes}" min="1" required>
+                    </td>
+                    <td>
+                            <input type="number" name="price" th:value="${service.price}" min="0" step="0.01" required>
+                    </td>
+                    <td>
+                            <label class="checkbox-inline">
+                                <input type="checkbox" name="active" th:checked="${service.active}"> Активна
+                            </label>
+                    </td>
+                    <td class="actions">
+                            <button type="submit" class="btn btn-secondary btn-sm">Сохранить</button>
+                        </form>
+                        <form th:action="@{/admin/services/{id}/delete(id=${service.id})}" method="post" class="inline-form"
+                              onsubmit="return confirm('Удалить услугу?');">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="empty" th:if="${#lists.isEmpty(services)}">Услуг пока нет.</p>
+    </section>
+
+    <section class="tab-panel" th:if="${activeTab == 'settings'}">
+        <h2>Обеденный перерыв</h2>
+        <p class="hint">В это время запись недоступна. Клиентам перерыв не показывается.</p>
+        <form class="grid-form" th:action="@{/admin/settings/lunch-break}" method="post" th:object="${lunchBreakForm}">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <div>
+                <label>Начало</label>
+                <input type="time" th:field="*{lunchBreakStart}" required>
+            </div>
+            <div>
+                <label>Окончание</label>
+                <input type="time" th:field="*{lunchBreakEnd}" required>
+            </div>
+            <div>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </div>
+        </form>
+
+        <h2>Лимиты записи (защита от спама)</h2>
+        <p class="hint">Ограничения невидимы для клиента. Настройте под нагрузку салона.</p>
+        <form class="grid-form" th:action="@{/admin/settings/limits}" method="post" th:object="${limitsForm}">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <div>
+                <label>Активных записей на телефон</label>
+                <input type="number" th:field="*{maxActiveBookingsPerPhone}" min="1" max="10" required>
+            </div>
+            <div>
+                <label>Записей в день на телефон</label>
+                <input type="number" th:field="*{maxBookingsPerPhonePerDay}" min="1" max="5" required>
+            </div>
+            <div>
+                <label>Записей в час с одного IP</label>
+                <input type="number" th:field="*{maxBookingsPerIpPerHour}" min="1" max="100" required>
+            </div>
+            <div>
+                <label>Записей в сутки с одного IP</label>
+                <input type="number" th:field="*{maxBookingsPerIpPerDay}" min="1" max="500" required>
+            </div>
+            <div>
+                <button type="submit" class="btn btn-primary">Сохранить лимиты</button>
+            </div>
+        </form>
+
+        <h2>Резервные копии</h2>
+        <p class="hint">Автоматически каждый день в 03:00. Хранятся услуги, записи и настройки.</p>
+        <form th:action="@{/admin/backups/create}" method="post" style="margin-bottom:16px">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <button type="submit" class="btn btn-primary">Создать бэкап сейчас</button>
+        </form>
+        <div class="backup-list" th:if="${!#lists.isEmpty(backups)}">
+            <div class="backup-item" th:each="file : ${backups}">
+                <span th:text="${file}">backup.json</span>
+                <a class="btn btn-secondary btn-sm" th:href="@{/admin/backups/download(file=${file})}">Скачать</a>
+            </div>
+        </div>
+        <p class="empty" th:if="${#lists.isEmpty(backups)}">Бэкапов пока нет</p>
+    </section>
+</main>
+
+<script th:src="@{/js/admin.js}"></script>
+</body>
+</html>

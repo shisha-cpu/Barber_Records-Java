@@ -1,0 +1,269 @@
+package com.example.barberrecods.service
+
+import com.example.barberrecods.config.AppProperties
+import com.example.barberrecods.dto.AvailableSlotsDayDto
+import com.example.barberrecods.dto.AvailableSlotsDto
+import com.example.barberrecods.dto.BookingRequest
+import com.example.barberrecods.dto.ServiceDto
+import com.example.barberrecods.dto.ServiceForm
+import com.example.barberrecods.entity.BarberService
+import com.example.barberrecods.entity.SalonSettings
+import com.example.barberrecods.entity.Booking
+import com.example.barberrecods.repository.BarberServiceRepository
+import com.example.barberrecods.repository.BookingRepository
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+
+@Service
+class BarberServiceService {
+
+    private final BarberServiceRepository serviceRepository
+
+    BarberServiceService(BarberServiceRepository serviceRepository) {
+        this.serviceRepository = serviceRepository
+    }
+
+    List<ServiceDto> getActiveServices() {
+        serviceRepository.findByActiveTrueOrderByNameAsc().collect { toDto(it) }
+    }
+
+    List<BarberService> getAllServices() {
+        serviceRepository.findAll().sort { a, b -> a.name <=> b.name }
+    }
+
+    Optional<BarberService> findById(Long id) {
+        serviceRepository.findById(id)
+    }
+
+    BarberService create(ServiceForm form) {
+        validateForm(form)
+        serviceRepository.save(new BarberService(
+                name: form.name.trim(),
+                durationMinutes: form.durationMinutes,
+                price: form.price,
+                active: form.active != null ? form.active : true
+        ))
+    }
+
+    BarberService update(Long id, ServiceForm form) {
+        validateForm(form)
+        BarberService service = serviceRepository.findById(id)
+                .orElseThrow { new IllegalArgumentException('Услуга не найдена') }
+        service.name = form.name.trim()
+        service.durationMinutes = form.durationMinutes
+        service.price = form.price
+        service.active = form.active != null ? form.active : true
+        serviceRepository.save(service)
+    }
+
+    void delete(Long id) {
+        if (!serviceRepository.existsById(id)) {
+            throw new IllegalArgumentException('Услуга не найдена')
+        }
+        serviceRepository.deleteById(id)
+    }
+
+    private static void validateForm(ServiceForm form) {
+        if (!form.name?.trim()) {
+            throw new IllegalArgumentException('Укажите название услуги')
+        }
+        if (form.durationMinutes == null || form.durationMinutes <= 0) {
+            throw new IllegalArgumentException('Длительность должна быть больше 0')
+        }
+        if (form.price == null || form.price < 0) {
+            throw new IllegalArgumentException('Укажите корректную цену')
+        }
+    }
+
+    private static ServiceDto toDto(BarberService service) {
+        new ServiceDto(
+                id: service.id,
+                name: service.name,
+                durationMinutes: service.durationMinutes,
+                price: service.price
+        )
+    }
+}
+
+@Service
+class BookingService {
+
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern('HH:mm')
+
+    private final BookingRepository bookingRepository
+    private final BarberServiceRepository serviceRepository
+    private final AppProperties appProperties
+    private final SalonSettingsService salonSettingsService
+    private final BookingProtectionService bookingProtectionService
+
+    BookingService(BookingRepository bookingRepository,
+                   BarberServiceRepository serviceRepository,
+                   AppProperties appProperties,
+                   SalonSettingsService salonSettingsService,
+                   BookingProtectionService bookingProtectionService) {
+        this.bookingRepository = bookingRepository
+        this.serviceRepository = serviceRepository
+        this.appProperties = appProperties
+        this.salonSettingsService = salonSettingsService
+        this.bookingProtectionService = bookingProtectionService
+    }
+
+    List<Booking> getAllBookings() {
+        bookingRepository.findAllByOrderByBookingDateDescBookingTimeDesc()
+    }
+
+    List<Booking> getBookingsBetween(LocalDate from, LocalDate to) {
+        bookingRepository.findByBookingDateBetweenOrderByBookingDateAscBookingTimeAsc(from, to)
+    }
+
+    AvailableSlotsDto getAvailableSlotsForRange(Long serviceId, LocalDate from, LocalDate to) {
+        if (to.isBefore(from)) {
+            throw new IllegalArgumentException('Некорректный период')
+        }
+        if (from.plusDays(62).isBefore(to)) {
+            throw new IllegalArgumentException('Период не может быть больше 62 дней')
+        }
+
+        BarberService service = serviceRepository.findById(serviceId)
+                .orElseThrow { new IllegalArgumentException('Услуга не найдена') }
+
+        LocalDate start = from.isBefore(LocalDate.now()) ? LocalDate.now() : from
+        List days = []
+        LocalDate date = start
+        while (!date.isAfter(to)) {
+            List<String> times = getAvailableTimes(serviceId, date)
+            if (!times.isEmpty()) {
+                days << new AvailableSlotsDayDto(
+                        date: date.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                        times: times
+                )
+            }
+            date = date.plusDays(1)
+        }
+
+        new AvailableSlotsDto(
+                serviceId: service.id,
+                serviceName: service.name,
+                durationMinutes: service.durationMinutes,
+                price: service.price,
+                from: start.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                to: to.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                days: days
+        )
+    }
+
+    List<String> getAvailableTimes(Long serviceId, LocalDate date) {
+        BarberService service = serviceRepository.findById(serviceId)
+                .orElseThrow { new IllegalArgumentException('Услуга не найдена') }
+
+        if (!service.active) {
+            throw new IllegalArgumentException('Услуга недоступна')
+        }
+
+        if (date.isBefore(LocalDate.now())) {
+            return []
+        }
+
+        LocalTime workStart = LocalTime.parse(appProperties.workingHours.start)
+        LocalTime workEnd = LocalTime.parse(appProperties.workingHours.end)
+        int interval = appProperties.slotIntervalMinutes
+
+        List<Booking> dayBookings = bookingRepository.findByBookingDateOrderByBookingTimeAsc(date)
+        List<String> slots = []
+
+        LocalTime slot = workStart
+        while (!slot.plusMinutes(service.durationMinutes).isAfter(workEnd)) {
+            if (date == LocalDate.now() && slot.isBefore(LocalTime.now())) {
+                slot = slot.plusMinutes(interval)
+                continue
+            }
+
+            if (isSlotFree(slot, service.durationMinutes, dayBookings)
+                    && !overlapsLunchBreak(slot, service.durationMinutes)) {
+                slots << slot.format(TIME_FORMAT)
+            }
+            slot = slot.plusMinutes(interval)
+        }
+        slots
+    }
+
+    @Transactional
+    Booking createBooking(BookingRequest request, String clientIp) {
+        if (!request.clientName?.trim()) {
+            throw new IllegalArgumentException('Укажите ФИО')
+        }
+        if (!request.clientPhone?.trim()) {
+            throw new IllegalArgumentException('Укажите телефон')
+        }
+
+        bookingProtectionService.validate(request, clientIp)
+        String normalizedPhone = BookingProtectionService.normalizePhone(request.clientPhone)
+
+        BarberService service = serviceRepository.findById(request.serviceId)
+                .orElseThrow { new IllegalArgumentException('Услуга не найдена') }
+
+        if (!service.active) {
+            throw new IllegalArgumentException('Услуга недоступна')
+        }
+
+        LocalDate date = LocalDate.parse(request.date)
+        LocalTime time = LocalTime.parse(request.time, TIME_FORMAT)
+
+        if (date.isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException('Нельзя записаться на прошедшую дату')
+        }
+
+        LocalTime workStart = LocalTime.parse(appProperties.workingHours.start)
+        LocalTime workEnd = LocalTime.parse(appProperties.workingHours.end)
+
+        if (time.isBefore(workStart) || time.plusMinutes(service.durationMinutes).isAfter(workEnd)) {
+            throw new IllegalArgumentException('Выбранное время вне рабочих часов')
+        }
+
+        if (overlapsLunchBreak(time, service.durationMinutes)) {
+            throw new IllegalArgumentException('Это время недоступно')
+        }
+
+        List<Booking> dayBookings = bookingRepository.findByBookingDateOrderByBookingTimeAsc(date)
+        if (!isSlotFree(time, service.durationMinutes, dayBookings)) {
+            throw new IllegalArgumentException('Это время уже занято')
+        }
+
+        bookingRepository.save(new Booking(
+                service: service,
+                bookingDate: date,
+                bookingTime: time,
+                clientName: request.clientName.trim(),
+                clientPhone: normalizedPhone,
+                clientIp: clientIp,
+                createdAt: LocalDateTime.now()
+        ))
+    }
+
+    void deleteBooking(Long id) {
+        if (!bookingRepository.existsById(id)) {
+            throw new IllegalArgumentException('Запись не найдена')
+        }
+        bookingRepository.deleteById(id)
+    }
+
+    private boolean overlapsLunchBreak(LocalTime start, int durationMinutes) {
+        SalonSettings settings = salonSettingsService.getSettings()
+        LocalTime end = start.plusMinutes(durationMinutes)
+        start < settings.lunchBreakEnd && end > settings.lunchBreakStart
+    }
+
+    private static boolean isSlotFree(LocalTime start, int durationMinutes, List<Booking> bookings) {
+        LocalTime end = start.plusMinutes(durationMinutes)
+        !bookings.any { booking ->
+            LocalTime bookingStart = booking.bookingTime
+            LocalTime bookingEnd = bookingStart.plusMinutes(booking.service.durationMinutes)
+            start < bookingEnd && end > bookingStart
+        }
+    }
+}

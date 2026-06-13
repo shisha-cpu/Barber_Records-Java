@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход — Barber Records</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div class="login-page">
+    <div class="login-card">
+        <h1>Админ-панель</h1>
+        <p class="hint">Введите логин и пароль</p>
+
+        <div class="error" th:if="${param.error}">Неверный логин или пароль</div>
+
+        <form th:action="@{/admin/login}" method="post">
+            <label for="username">Логин</label>
+            <input type="text" id="username" name="username" required autofocus>
+
+            <label for="password">Пароль</label>
+            <input type="password" id="password" name="password" required>
+
+            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:20px">Войти</button>
+        </form>
+    </div>
+</div>
+</body>
+</html>
