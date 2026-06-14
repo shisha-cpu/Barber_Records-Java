@@ -222,11 +222,12 @@ input[type="time"]:focus {
 
 .service-item-name {
     font-weight: 600;
+    font-size: 1rem;
 }
 
 .service-item-meta {
     color: var(--muted);
-    font-size: 0.92rem;
+    font-size: 1rem;
 }
 
 .calendar {
@@ -299,10 +300,110 @@ input[type="time"]:focus {
     cursor: not-allowed;
 }
 
+.time-slots-area {
+    position: relative;
+    min-height: 280px;
+    margin-top: 20px;
+}
+
+.time-slots-area .time-slots {
+    transition: opacity 0.2s ease;
+}
+
+.time-slots-area.loading .time-slots {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.time-slots-area .empty {
+    margin: 48px 0 0;
+    text-align: center;
+}
+
 .time-slots {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
     gap: 10px;
+}
+
+.week-picker {
+    margin-bottom: 4px;
+}
+
+.week-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.week-range {
+    font-weight: 600;
+    font-size: 1.125rem;
+}
+
+.week-nav {
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    cursor: pointer;
+    color: var(--text);
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.week-nav:hover {
+    background: var(--accent);
+}
+
+.week-picker-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+
+.week-day-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 4px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 12px;
+}
+
+.week-day-name {
+    font-size: 0.92rem;
+    color: var(--muted);
+}
+
+.week-day-num {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 1.05rem;
+}
+
+.week-day-cell.weekend .week-day-name,
+.week-day-cell.weekend .week-day-num {
+    color: #e11d48;
+}
+
+.week-day-cell.selected .week-day-num {
+    background: var(--primary);
+    color: #fff;
+}
+
+.week-day-cell.weekend.selected .week-day-num {
+    color: #fff;
 }
 
 .time-slot {
@@ -774,8 +875,11 @@ th {
 .share-actions {
     display: flex;
     gap: 10px;
-    margin-top: 20px;
     flex-wrap: wrap;
+}
+
+#availablePanel .detail-panel-header h3 {
+    margin: 0;
 }
 
 .calendar-title {
@@ -785,6 +889,24 @@ th {
 }
 
 @media (max-width: 640px) {
+    .time-slots-area {
+        min-height: 360px;
+    }
+
+    .time-slots {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .week-picker-days {
+        gap: 2px;
+    }
+
+    .week-day-num {
+        width: 32px;
+        height: 32px;
+        font-size: 0.85rem;
+    }
+
     .quiz-actions {
         flex-direction: column;
     }

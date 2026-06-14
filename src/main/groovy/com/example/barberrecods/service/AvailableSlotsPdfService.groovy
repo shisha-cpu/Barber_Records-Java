@@ -33,29 +33,23 @@ class AvailableSlotsPdfService {
     byte[] generate(Long serviceId, LocalDate from, LocalDate to) {
         AvailableSlotsDto slots = bookingService.getAvailableSlotsForRange(serviceId, from, to)
         BaseFont baseFont = loadFont()
-        Font titleFont = new Font(baseFont, 18, Font.BOLD)
         Font headerFont = new Font(baseFont, 12, Font.BOLD)
         Font bodyFont = new Font(baseFont, 11, Font.NORMAL)
-        Font mutedFont = new Font(baseFont, 10, Font.NORMAL)
 
         ByteArrayOutputStream out = new ByteArrayOutputStream()
         Document document = new Document(PageSize.A4, 40, 40, 48, 48)
         PdfWriter.getInstance(document, out)
         document.open()
 
-        Paragraph title = new Paragraph('Barber Records', titleFont)
-        title.alignment = Element.ALIGN_CENTER
-        document.add(title)
-
         document.add(new Paragraph('Доступные окна для записи', headerFont))
         document.add(new Paragraph("Услуга: ${slots.serviceName}", bodyFont))
         document.add(new Paragraph("Длительность: ${slots.durationMinutes} мин", bodyFont))
         document.add(new Paragraph("Цена: ${formatPrice(slots.price)}", bodyFont))
-        document.add(new Paragraph("Период: ${formatDate(slots.from)} — ${formatDate(slots.to)}", bodyFont))
+        document.add(new Paragraph(formatPeriod(slots.from, slots.to), bodyFont))
         document.add(new Paragraph(' ', bodyFont))
 
         if (slots.days.isEmpty()) {
-            document.add(new Paragraph('На выбранный период свободных окон нет.', mutedFont))
+            document.add(new Paragraph('На выбранный период свободных окон нет.', bodyFont))
         } else {
             slots.days.each { day ->
                 document.add(new Paragraph(formatDate(day.date), headerFont))
@@ -76,11 +70,6 @@ class AvailableSlotsPdfService {
                 document.add(table)
             }
         }
-
-        document.add(new Paragraph(' ', bodyFont))
-        Paragraph footer = new Paragraph('Запишитесь онлайн или ответьте удобное время мастеру.', mutedFont)
-        footer.alignment = Element.ALIGN_CENTER
-        document.add(footer)
 
         document.close()
         out.toByteArray()
@@ -128,11 +117,18 @@ class AvailableSlotsPdfService {
         cell
     }
 
+    private static String formatPeriod(String fromIso, String toIso) {
+        if (fromIso == toIso) {
+            return "Дата ${formatDate(fromIso)}"
+        }
+        "Период: ${formatDate(fromIso)} — ${formatDate(toIso)}"
+    }
+
     private static String formatDate(String iso) {
         LocalDate.parse(iso).format(DATE_RU)
     }
 
     private static String formatPrice(BigDecimal price) {
-        "${price.stripTrailingZeros().toPlainString()} ₽"
+        "от ${price.stripTrailingZeros().toPlainString()} ₽"
     }
 }

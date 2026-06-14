@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Админ — Barber Records</title>
+    <title>Админ</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/favicon.svg}">
     <link rel="stylesheet" th:href="@{/css/style.css}">
 </head>
 <body class="admin-page">
 <header class="admin-header">
-    <h1>Barber Records — админ</h1>
+    <h1>Администрирование сайта</h1>
     <form th:action="@{/admin/logout}" method="post">
         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
         <button type="submit" class="btn btn-secondary">Выйти</button>
@@ -59,14 +60,16 @@
         </div>
 
         <div id="availablePanel" class="detail-panel hidden">
-            <h3>Доступные окна</h3>
+            <div class="detail-panel-header">
+                <h3>Доступные окна</h3>
+                <div class="share-actions hidden" id="shareActions">
+                    <button type="button" class="btn btn-primary btn-sm" id="sharePdfBtn">Поделиться PDF</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="downloadPdfBtn">Скачать PDF</button>
+                </div>
+            </div>
             <label for="availableServiceSelect">Услуга</label>
             <select id="availableServiceSelect" class="select-input"></select>
             <div id="availableSlotsResult" class="available-slots-result"></div>
-            <div class="share-actions hidden" id="shareActions">
-                <button type="button" class="btn btn-primary" id="sharePdfBtn">Поделиться PDF</button>
-                <button type="button" class="btn btn-secondary" id="downloadPdfBtn">Скачать PDF</button>
-            </div>
         </div>
     </section>
 

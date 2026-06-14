@@ -1,6 +1,6 @@
 (() => {
-    const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-        'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+    const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+        'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
     const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
     const state = {
@@ -8,7 +8,7 @@
         service: null,
         date: null,
         time: null,
-        calendarMonth: new Date()
+        weekStart: startOfDay(new Date())
     };
 
     const welcome = document.getElementById('stepWelcome');
@@ -21,13 +21,15 @@
     const serviceSearch = document.getElementById('serviceSearch');
     const serviceList = document.getElementById('serviceList');
     const noServicesHint = document.getElementById('noServicesHint');
-    const calendarEl = document.getElementById('calendar');
+    const weekPickerEl = document.getElementById('weekPicker');
     const selectedDateInput = document.getElementById('selectedDate');
-    const selectedDateLabel = document.getElementById('selectedDateLabel');
     const timeSlots = document.getElementById('timeSlots');
+    const timeSlotsArea = document.querySelector('.time-slots-area');
     const noSlotsHint = document.getElementById('noSlotsHint');
     const formError = document.getElementById('formError');
     const formSuccess = document.getElementById('formSuccess');
+
+    let slotsRequestId = 0;
 
     startBtn.addEventListener('click', () => {
         welcome.classList.add('hidden');
@@ -49,10 +51,7 @@
         clearMessages();
         if (!validateStep(state.step)) return;
 
-        if (state.step === 2) {
-            await loadTimeSlots();
-        }
-        if (state.step === 4) {
+        if (state.step === 3) {
             fillPreview();
         }
         goToStep(state.step + 1);
@@ -78,14 +77,16 @@
         });
 
         prevBtn.classList.toggle('hidden', step === 0);
-        nextBtn.classList.toggle('hidden', step === 5);
-        confirmBtn.classList.toggle('hidden', step !== 5);
+        nextBtn.classList.toggle('hidden', step === 4);
+        confirmBtn.classList.toggle('hidden', step !== 4);
 
         if (step === 2) {
-            renderCalendar();
-        }
-        if (step === 3 && state.date) {
-            selectedDateLabel.textContent = formatDateLabel(state.date);
+            if (!state.date || isBeforeDay(parseIsoDate(state.date), startOfDay(new Date()))) {
+                state.date = toIsoDate(startOfDay(new Date()));
+                state.weekStart = startOfDay(new Date());
+            }
+            renderWeekPicker();
+            loadTimeSlots();
         }
     }
 
@@ -111,95 +112,105 @@
         noServicesHint.classList.toggle('hidden', visible > 0);
     }
 
-    function renderCalendar() {
-        const year = state.calendarMonth.getFullYear();
-        const month = state.calendarMonth.getMonth();
+    function renderWeekPicker() {
         const today = startOfDay(new Date());
-
-        calendarEl.innerHTML = '';
-
-        const header = document.createElement('div');
-        header.className = 'calendar-header';
-        header.innerHTML = `
-            <button type="button" class="calendar-nav" id="prevMonth">&larr;</button>
-            <span class="calendar-title">${MONTHS[month]} ${year}</span>
-            <button type="button" class="calendar-nav" id="nextMonth">&rarr;</button>
-        `;
-        calendarEl.appendChild(header);
-
-        const weekdays = document.createElement('div');
-        weekdays.className = 'calendar-weekdays';
-        WEEKDAYS.forEach((day) => {
-            const cell = document.createElement('div');
-            cell.textContent = day;
-            weekdays.appendChild(cell);
-        });
-        calendarEl.appendChild(weekdays);
-
-        const grid = document.createElement('div');
-        grid.className = 'calendar-grid';
-
-        const firstDay = new Date(year, month, 1);
-        let offset = firstDay.getDay() - 1;
-        if (offset < 0) offset = 6;
-
-        for (let i = 0; i < offset; i++) {
-            grid.appendChild(document.createElement('div'));
+        const weekDays = [];
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(state.weekStart);
+            date.setDate(state.weekStart.getDate() + i);
+            weekDays.push(date);
         }
 
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        for (let day = 1; day <= daysInMonth; day++) {
-            const date = new Date(year, month, day);
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'calendar-day';
-            btn.textContent = String(day);
+        const first = weekDays[0];
+        const last = weekDays[6];
+        const rangeLabel = first.getMonth() === last.getMonth()
+            ? `${first.getDate()} — ${last.getDate()} ${MONTHS[last.getMonth()]}`
+            : `${first.getDate()} ${MONTHS[first.getMonth()]} — ${last.getDate()} ${MONTHS[last.getMonth()]}`;
 
+        const canGoPrev = state.weekStart > today;
+
+        weekPickerEl.innerHTML = '';
+
+        const header = document.createElement('div');
+        header.className = 'week-picker-header';
+        header.innerHTML = `
+            <button type="button" class="week-nav${canGoPrev ? '' : ' hidden'}" id="prevWeek" aria-label="Предыдущая неделя">&larr;</button>
+            <span class="week-range">${rangeLabel}</span>
+            <button type="button" class="week-nav" id="nextWeek" aria-label="Следующая неделя">&rarr;</button>
+        `;
+        weekPickerEl.appendChild(header);
+
+        const weekdaysRow = document.createElement('div');
+        weekdaysRow.className = 'week-picker-days';
+        weekDays.forEach((date) => {
             const iso = toIsoDate(date);
-            if (date < today) {
-                btn.disabled = true;
-                btn.classList.add('disabled');
-            }
-            if (state.date === iso) {
-                btn.classList.add('selected');
-            }
-            btn.addEventListener('click', () => {
+            const weekdayIndex = (date.getDay() + 6) % 7;
+            const isWeekend = weekdayIndex >= 5;
+            const isSelected = state.date === iso;
+
+            const cell = document.createElement('button');
+            cell.type = 'button';
+            cell.className = 'week-day-cell';
+            cell.dataset.date = iso;
+            if (isWeekend) cell.classList.add('weekend');
+            if (isSelected) cell.classList.add('selected');
+            cell.innerHTML = `
+                <span class="week-day-name">${WEEKDAYS[weekdayIndex]}</span>
+                <span class="week-day-num">${date.getDate()}</span>
+            `;
+            cell.addEventListener('click', async () => {
+                if (state.date === iso) return;
                 state.date = iso;
                 selectedDateInput.value = iso;
                 state.time = null;
-                renderCalendar();
+                updateWeekSelection();
+                await loadTimeSlots();
             });
-            grid.appendChild(btn);
-        }
-        calendarEl.appendChild(grid);
-
-        document.getElementById('prevMonth').addEventListener('click', () => {
-            state.calendarMonth = new Date(year, month - 1, 1);
-            renderCalendar();
+            weekdaysRow.appendChild(cell);
         });
-        document.getElementById('nextMonth').addEventListener('click', () => {
-            state.calendarMonth = new Date(year, month + 1, 1);
-            renderCalendar();
+        weekPickerEl.appendChild(weekdaysRow);
+
+        const prevBtn = document.getElementById('prevWeek');
+        const nextBtn = document.getElementById('nextWeek');
+        if (prevBtn) {
+            prevBtn.addEventListener('click', async () => {
+                const nextStart = new Date(state.weekStart);
+                nextStart.setDate(nextStart.getDate() - 7);
+                if (nextStart < today) return;
+                state.weekStart = nextStart;
+                if (!state.date || !isDateInWeek(parseIsoDate(state.date), state.weekStart)) {
+                    state.date = toIsoDate(state.weekStart);
+                    selectedDateInput.value = state.date;
+                }
+                state.time = null;
+                renderWeekPicker();
+                await loadTimeSlots();
+            });
+        }
+        nextBtn.addEventListener('click', async () => {
+            const nextStart = new Date(state.weekStart);
+            nextStart.setDate(nextStart.getDate() + 7);
+            state.weekStart = nextStart;
+            if (!state.date || !isDateInWeek(parseIsoDate(state.date), state.weekStart)) {
+                state.date = toIsoDate(state.weekStart);
+                selectedDateInput.value = state.date;
+            }
+            state.time = null;
+            renderWeekPicker();
+            await loadTimeSlots();
+        });
+
+        selectedDateInput.value = state.date || '';
+    }
+
+    function updateWeekSelection() {
+        weekPickerEl.querySelectorAll('.week-day-cell').forEach((cell) => {
+            cell.classList.toggle('selected', cell.dataset.date === state.date);
         });
     }
 
-    async function loadTimeSlots() {
-        timeSlots.innerHTML = '';
-        noSlotsHint.classList.add('hidden');
-        state.time = null;
-
-        const params = new URLSearchParams({
-            serviceId: state.service.id,
-            date: state.date
-        });
-        const response = await fetch(`/api/times?${params}`);
-        const times = await response.json();
-
-        if (!times.length) {
-            noSlotsHint.classList.remove('hidden');
-            return;
-        }
-
+    function renderSlotButtons(times) {
+        const fragment = document.createDocumentFragment();
         times.forEach((time) => {
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -210,8 +221,48 @@
                 btn.classList.add('selected');
                 state.time = time;
             });
-            timeSlots.appendChild(btn);
+            fragment.appendChild(btn);
         });
+        return fragment;
+    }
+
+    async function loadTimeSlots() {
+        if (!state.service || !state.date) return;
+
+        const requestId = ++slotsRequestId;
+        timeSlotsArea.classList.add('loading');
+        state.time = null;
+
+        try {
+            const params = new URLSearchParams({
+                serviceId: state.service.id,
+                date: state.date
+            });
+            const response = await fetch(`/api/times?${params}`);
+            const times = await response.json();
+
+            if (requestId !== slotsRequestId) return;
+
+            noSlotsHint.textContent = 'На эту дату нет свободного времени';
+            timeSlots.replaceChildren();
+            noSlotsHint.classList.add('hidden');
+
+            if (!times.length) {
+                noSlotsHint.classList.remove('hidden');
+                return;
+            }
+
+            timeSlots.appendChild(renderSlotButtons(times));
+        } catch (e) {
+            if (requestId !== slotsRequestId) return;
+            timeSlots.replaceChildren();
+            noSlotsHint.classList.remove('hidden');
+            noSlotsHint.textContent = 'Не удалось загрузить время. Попробуйте ещё раз.';
+        } finally {
+            if (requestId === slotsRequestId) {
+                timeSlotsArea.classList.remove('loading');
+            }
+        }
     }
 
     function fillPreview() {
@@ -262,6 +313,7 @@
         state.service = null;
         state.date = null;
         state.time = null;
+        state.weekStart = startOfDay(new Date());
         document.getElementById('clientName').value = '';
         document.getElementById('clientPhone').value = '';
         document.getElementById('website').value = '';
@@ -280,15 +332,17 @@
             showError('Выберите услугу');
             return false;
         }
-        if (step === 2 && !state.date) {
-            showError('Выберите дату');
-            return false;
+        if (step === 2) {
+            if (!state.date) {
+                showError('Выберите дату');
+                return false;
+            }
+            if (!state.time) {
+                showError('Выберите время');
+                return false;
+            }
         }
-        if (step === 3 && !state.time) {
-            showError('Выберите время');
-            return false;
-        }
-        if (step === 4) {
+        if (step === 3) {
             const name = document.getElementById('clientName').value.trim();
             const phone = document.getElementById('clientPhone').value.trim();
             if (!name) {
@@ -315,7 +369,7 @@
     }
 
     function formatPrice(value) {
-        return `${Number(value).toLocaleString('ru-RU')} ₽`;
+        return `от ${Number(value).toLocaleString('ru-RU')} ₽`;
     }
 
     function formatDateLabel(iso) {
@@ -330,7 +384,23 @@
         return `${y}-${m}-${d}`;
     }
 
+    function parseIsoDate(iso) {
+        const [y, m, d] = iso.split('-').map(Number);
+        return new Date(y, m - 1, d);
+    }
+
     function startOfDay(date) {
         return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+
+    function isBeforeDay(a, b) {
+        return a.getTime() < b.getTime();
+    }
+
+    function isDateInWeek(date, weekStart) {
+        const start = startOfDay(weekStart).getTime();
+        const end = start + 6 * 24 * 60 * 60 * 1000;
+        const value = startOfDay(date).getTime();
+        return value >= start && value <= end;
     }
 })();
