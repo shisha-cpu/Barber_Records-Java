@@ -98,6 +98,42 @@ docker compose up --build -d
 Сайт: http://localhost:8080  
 Админ: http://localhost:8080/admin/login
 
+### VPS с 1 GB RAM (важно)
+
+**Не запускайте** `docker compose up --build` на слабом VPS — Gradle внутри Docker съедает всю память.
+
+#### 1. Swap на сервере (один раз)
+
+```bash
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+```
+
+#### 2. Сборка на вашем ПК
+
+```powershell
+cd C:\Users\qwe\Desktop\BarberRecods
+.\gradlew.bat bootJar --no-daemon
+scp build\libs\*.jar root@155.212.139.212:~/Barber_Records-Java/build/libs/
+scp docker-compose.prod.yml Dockerfile.runtime root@155.212.139.212:~/Barber_Records-Java/
+```
+
+#### 3. Запуск на VPS (без Gradle)
+
+```bash
+cd ~/Barber_Records-Java
+docker-compose -f docker-compose.prod.yml up -d --build
+```
+
+Обновление после изменений в коде — снова `bootJar` на ПК, `scp` JAR, на VPS:
+
+```bash
+docker-compose -f docker-compose.prod.yml up -d --build
+```
+
 ### Логи
 
 ```powershell

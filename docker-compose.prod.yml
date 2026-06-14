@@ -1,0 +1,57 @@
+# VPS с 1 GB RAM: без Gradle-сборки на сервере, лимиты памяти
+# На ПК:  gradlew bootJar  →  scp build/libs/*.jar на сервер
+# На VPS: docker-compose -f docker-compose.prod.yml up -d --build
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: barber-postgres
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: >
+      postgres
+      -c shared_buffers=64MB
+      -c max_connections=30
+      -c work_mem=4MB
+      -c maintenance_work_mem=32MB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    mem_limit: 280m
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+    container_name: barber-app
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      APP_ADMIN_USERNAME: ${APP_ADMIN_USERNAME}
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD}
+      JAVA_OPTS: "-XX:+UseSerialGC -Xms128m -Xmx384m"
+    ports:
+      - "8080:8080"
+    volumes:
+      - app_backups:/app/backups
+    restart: unless-stopped
+    mem_limit: 512m
+
+volumes:
+  postgres_data:
+  app_backups:
