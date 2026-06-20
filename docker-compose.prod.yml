@@ -45,6 +45,7 @@ services:
       APP_ADMIN_USERNAME: ${APP_ADMIN_USERNAME}
       APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD}
       JAVA_OPTS: "-XX:+UseSerialGC -Xms128m -Xmx384m"
+      TZ: Europe/Moscow
     ports:
       - "8080:8080"
     volumes:

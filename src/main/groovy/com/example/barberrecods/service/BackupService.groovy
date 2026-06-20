@@ -5,6 +5,7 @@ import com.example.barberrecods.entity.Booking
 import com.example.barberrecods.entity.SalonSettings
 import com.example.barberrecods.repository.BarberServiceRepository
 import com.example.barberrecods.repository.BookingRepository
+import com.example.barberrecods.repository.SalonClosedDayRepository
 import com.example.barberrecods.repository.SalonSettingsRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
@@ -27,16 +28,19 @@ class BackupService {
     private final BarberServiceRepository serviceRepository
     private final BookingRepository bookingRepository
     private final SalonSettingsRepository settingsRepository
+    private final SalonClosedDayRepository closedDayRepository
     private final ObjectMapper objectMapper
     private final Path backupDir
 
     BackupService(BarberServiceRepository serviceRepository,
                   BookingRepository bookingRepository,
                   SalonSettingsRepository settingsRepository,
+                  SalonClosedDayRepository closedDayRepository,
                   @Value('${app.backups.path:backups}') String backupPath) {
         this.serviceRepository = serviceRepository
         this.bookingRepository = bookingRepository
         this.settingsRepository = settingsRepository
+        this.closedDayRepository = closedDayRepository
         this.objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
@@ -52,7 +56,8 @@ class BackupService {
                 createdAt: LocalDateTime.now().toString(),
                 services : serviceRepository.findAll(),
                 bookings : bookingRepository.findAll(),
-                settings : settingsRepository.findAll()
+                settings : settingsRepository.findAll(),
+                closedDays: closedDayRepository.findAll()
         ]
 
         objectMapper.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), payload)

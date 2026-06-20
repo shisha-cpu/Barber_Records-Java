@@ -10,6 +10,7 @@ class AppProperties {
     Admin admin = new Admin()
     WorkingHours workingHours = new WorkingHours()
     int slotIntervalMinutes = 30
+    String timezone = 'Europe/Moscow'
 
     static class Admin {
         String username = 'admin'

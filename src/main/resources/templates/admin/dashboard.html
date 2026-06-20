@@ -8,13 +8,13 @@
     <link rel="stylesheet" th:href="@{/css/style.css}">
 </head>
 <body class="admin-page">
-<header class="admin-header">
+<!-- <header class="admin-header">
     <h1>Администрирование сайта</h1>
     <form th:action="@{/admin/logout}" method="post">
         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
         <button type="submit" class="btn btn-secondary">Выйти</button>
     </form>
-</header>
+</header> -->
 
 <main class="admin-main">
     <nav class="tabs">
@@ -102,8 +102,8 @@
         </form>
 
         <h2>Список услуг</h2>
-        <div class="table-wrap">
-            <table>
+        <div class="table-wrap services-table-wrap">
+            <table class="services-table">
                 <thead>
                 <tr>
                     <th>Название</th>
@@ -115,18 +115,18 @@
                 </thead>
                 <tbody>
                 <tr th:each="service : ${services}">
-                    <td>
+                    <td data-label="Название">
                         <form th:action="@{/admin/services/{id}(id=${service.id})}" method="post" class="inline-form">
                             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                             <input type="text" name="name" th:value="${service.name}" required>
                     </td>
-                    <td>
+                    <td data-label="Длительность">
                             <input type="number" name="durationMinutes" th:value="${service.durationMinutes}" min="1" required>
                     </td>
-                    <td>
+                    <td data-label="Цена">
                             <input type="number" name="price" th:value="${service.price}" min="0" step="0.01" required>
                     </td>
-                    <td>
+                    <td data-label="Статус">
                             <label class="checkbox-inline">
                                 <input type="checkbox" name="active" th:checked="${service.active}"> Активна
                             </label>
@@ -164,6 +164,52 @@
                 <button type="submit" class="btn btn-primary">Сохранить</button>
             </div>
         </form>
+
+        <div class="settings-section">
+            <h2>Нерабочие дни и отпуск</h2>
+            <form class="weekends-form" th:action="@{/admin/settings/weekends}" method="post" th:object="${weekendsForm}">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <label class="checkbox-field">
+                    <input type="checkbox" th:field="*{weekendsClosed}">
+                    Закрывать субботу и воскресенье
+                </label>
+                <button type="submit" class="btn btn-secondary btn-sm">Сохранить</button>
+            </form>
+            <p class="hint">По умолчанию выходные закрыты. Снимите галочку, чтобы принимать записи в субботу и воскресенье.</p>
+            <p class="hint">Ниже можно добавить отдельные дни или период отпуска.</p>
+            <form class="grid-form" th:action="@{/admin/settings/closed-days}" method="post" th:object="${closedDayForm}">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <div>
+                    <label>С</label>
+                    <input type="date" th:field="*{fromDate}" required>
+                </div>
+                <div>
+                    <label>По</label>
+                    <input type="date" th:field="*{toDate}" required>
+                </div>
+                <div>
+                    <label>Комментарий</label>
+                    <input type="text" th:field="*{label}" placeholder="Отпуск, выходной...">
+                </div>
+                <div>
+                    <button type="submit" class="btn btn-primary">Добавить</button>
+                </div>
+            </form>
+            <div class="closed-days-list" th:if="${!#lists.isEmpty(closedDays)}">
+                <div class="closed-day-item" th:each="day : ${closedDays}">
+                    <div>
+                        <strong th:text="${day.periodText}">01.01.2026</strong>
+                        <span class="hint" th:text="' · ' + ${day.label}"> · Отпуск</span>
+                    </div>
+                    <form th:action="@{/admin/settings/closed-days/{id}/delete(id=${day.id})}" method="post"
+                          onsubmit="return confirm('Удалить этот период?');">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                        <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
+                    </form>
+                </div>
+            </div>
+            <p class="empty" th:if="${#lists.isEmpty(closedDays)}">Нерабочие дни не заданы</p>
+        </div>
 
         <h2>Лимиты записи (защита от спама)</h2>
         <p class="hint">Ограничения невидимы для клиента. Настройте под нагрузку салона.</p>

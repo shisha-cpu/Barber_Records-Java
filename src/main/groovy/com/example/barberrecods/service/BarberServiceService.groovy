@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Service
@@ -94,22 +95,26 @@ class BarberServiceService {
 class BookingService {
 
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern('HH:mm')
+    private static final DateTimeFormatter CREATED_AT_FORMAT = DateTimeFormatter.ofPattern('dd.MM.yyyy HH:mm')
 
     private final BookingRepository bookingRepository
     private final BarberServiceRepository serviceRepository
     private final AppProperties appProperties
     private final SalonSettingsService salonSettingsService
+    private final ClosedDaysService closedDaysService
     private final BookingProtectionService bookingProtectionService
 
     BookingService(BookingRepository bookingRepository,
                    BarberServiceRepository serviceRepository,
                    AppProperties appProperties,
                    SalonSettingsService salonSettingsService,
+                   ClosedDaysService closedDaysService,
                    BookingProtectionService bookingProtectionService) {
         this.bookingRepository = bookingRepository
         this.serviceRepository = serviceRepository
         this.appProperties = appProperties
         this.salonSettingsService = salonSettingsService
+        this.closedDaysService = closedDaysService
         this.bookingProtectionService = bookingProtectionService
     }
 
@@ -132,7 +137,7 @@ class BookingService {
         BarberService service = serviceRepository.findById(serviceId)
                 .orElseThrow { new IllegalArgumentException('Услуга не найдена') }
 
-        LocalDate start = from.isBefore(LocalDate.now()) ? LocalDate.now() : from
+        LocalDate start = from.isBefore(today()) ? today() : from
         List days = []
         LocalDate date = start
         while (!date.isAfter(to)) {
@@ -165,20 +170,26 @@ class BookingService {
             throw new IllegalArgumentException('Услуга недоступна')
         }
 
-        if (date.isBefore(LocalDate.now())) {
+        if (date.isBefore(today())) {
+            return []
+        }
+
+        if (closedDaysService.isDateClosed(date)) {
             return []
         }
 
         LocalTime workStart = LocalTime.parse(appProperties.workingHours.start)
         LocalTime workEnd = LocalTime.parse(appProperties.workingHours.end)
         int interval = appProperties.slotIntervalMinutes
+        LocalDate today = today()
+        LocalTime now = now()
 
         List<Booking> dayBookings = bookingRepository.findByBookingDateOrderByBookingTimeAsc(date)
         List<String> slots = []
 
         LocalTime slot = workStart
         while (!slot.plusMinutes(service.durationMinutes).isAfter(workEnd)) {
-            if (date == LocalDate.now() && slot.isBefore(LocalTime.now())) {
+            if (date.equals(today) && !slot.isAfter(now)) {
                 slot = slot.plusMinutes(interval)
                 continue
             }
@@ -213,9 +224,18 @@ class BookingService {
 
         LocalDate date = LocalDate.parse(request.date)
         LocalTime time = LocalTime.parse(request.time, TIME_FORMAT)
+        LocalDate today = today()
 
-        if (date.isBefore(LocalDate.now())) {
+        if (date.isBefore(today)) {
             throw new IllegalArgumentException('Нельзя записаться на прошедшую дату')
+        }
+
+        if (date.equals(today) && !time.isAfter(now())) {
+            throw new IllegalArgumentException('Нельзя записаться на прошедшее время')
+        }
+
+        if (closedDaysService.isDateClosed(date)) {
+            throw new IllegalArgumentException('На эту дату запись недоступна')
         }
 
         LocalTime workStart = LocalTime.parse(appProperties.workingHours.start)
@@ -241,8 +261,24 @@ class BookingService {
                 clientName: request.clientName.trim(),
                 clientPhone: normalizedPhone,
                 clientIp: clientIp,
-                createdAt: LocalDateTime.now()
+                createdAt: LocalDateTime.now(salonZone())
         ))
+    }
+
+    private ZoneId salonZone() {
+        ZoneId.of(appProperties.timezone ?: 'Europe/Moscow')
+    }
+
+    private LocalDate today() {
+        LocalDate.now(salonZone())
+    }
+
+    private LocalTime now() {
+        LocalTime.now(salonZone())
+    }
+
+    static String formatCreatedAt(LocalDateTime createdAt) {
+        createdAt?.format(CREATED_AT_FORMAT) ?: ''
     }
 
     void deleteBooking(Long id) {

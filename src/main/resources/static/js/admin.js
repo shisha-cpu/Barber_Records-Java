@@ -304,6 +304,7 @@
                 <strong>${booking.time} — ${booking.serviceName}</strong>
                 <div class="booking-card-meta">${booking.clientName} · ${booking.clientPhone}</div>
                 <div class="booking-card-meta">${booking.durationMinutes} мин · ${formatPrice(booking.price)}</div>
+                ${booking.createdAt ? `<div class="booking-card-meta">Оформлена: ${booking.createdAt}</div>` : ''}
             </div>
             <form action="/admin/bookings/${booking.id}/delete" method="post">
                 <input type="hidden" name="_csrf" value="${getCsrfToken()}">

@@ -8,7 +8,8 @@
         service: null,
         date: null,
         time: null,
-        weekStart: startOfDay(new Date())
+        weekStart: startOfDay(new Date()),
+        closedDates: new Set()
     };
 
     const welcome = document.getElementById('stepWelcome');
@@ -81,13 +82,32 @@
         confirmBtn.classList.toggle('hidden', step !== 4);
 
         if (step === 2) {
-            if (!state.date || isBeforeDay(parseIsoDate(state.date), startOfDay(new Date()))) {
-                state.date = toIsoDate(startOfDay(new Date()));
-                state.weekStart = startOfDay(new Date());
-            }
-            renderWeekPicker();
-            loadTimeSlots();
+            void initDateTimeStep();
         }
+    }
+
+    async function initDateTimeStep() {
+        if (!state.date || isBeforeDay(parseIsoDate(state.date), startOfDay(new Date()))) {
+            state.date = toIsoDate(startOfDay(new Date()));
+            state.weekStart = startOfDay(new Date());
+        }
+        await renderWeekPicker();
+        if (state.closedDates.has(state.date)) {
+            const openCell = weekPickerEl.querySelector('.week-day-cell:not(.closed)');
+            if (openCell) {
+                state.date = openCell.dataset.date;
+                selectedDateInput.value = state.date;
+                updateWeekSelection();
+            }
+        }
+        await loadTimeSlots();
+    }
+
+    async function fetchClosedDays(fromIso, toIso) {
+        const params = new URLSearchParams({ from: fromIso, to: toIso });
+        const response = await fetch(`/api/closed-days?${params}`);
+        if (!response.ok) return new Set();
+        return new Set(await response.json());
     }
 
     function selectService(item) {
@@ -112,7 +132,7 @@
         noServicesHint.classList.toggle('hidden', visible > 0);
     }
 
-    function renderWeekPicker() {
+    async function renderWeekPicker() {
         const today = startOfDay(new Date());
         const weekDays = [];
         for (let i = 0; i < 7; i++) {
@@ -120,6 +140,10 @@
             date.setDate(state.weekStart.getDate() + i);
             weekDays.push(date);
         }
+
+        const weekFrom = toIsoDate(weekDays[0]);
+        const weekTo = toIsoDate(weekDays[6]);
+        state.closedDates = await fetchClosedDays(weekFrom, weekTo);
 
         const first = weekDays[0];
         const last = weekDays[6];
@@ -148,18 +172,24 @@
             const isWeekend = weekdayIndex >= 5;
             const isSelected = state.date === iso;
 
+            const isClosed = state.closedDates.has(iso);
+
             const cell = document.createElement('button');
             cell.type = 'button';
             cell.className = 'week-day-cell';
             cell.dataset.date = iso;
             if (isWeekend) cell.classList.add('weekend');
             if (isSelected) cell.classList.add('selected');
+            if (isClosed) {
+                cell.classList.add('closed');
+                cell.disabled = true;
+            }
             cell.innerHTML = `
                 <span class="week-day-name">${WEEKDAYS[weekdayIndex]}</span>
                 <span class="week-day-num">${date.getDate()}</span>
             `;
             cell.addEventListener('click', async () => {
-                if (state.date === iso) return;
+                if (isClosed || state.date === iso) return;
                 state.date = iso;
                 selectedDateInput.value = iso;
                 state.time = null;
@@ -183,7 +213,7 @@
                     selectedDateInput.value = state.date;
                 }
                 state.time = null;
-                renderWeekPicker();
+                await renderWeekPicker();
                 await loadTimeSlots();
             });
         }
@@ -196,7 +226,7 @@
                 selectedDateInput.value = state.date;
             }
             state.time = null;
-            renderWeekPicker();
+            await renderWeekPicker();
             await loadTimeSlots();
         });
 
@@ -232,6 +262,14 @@
         const requestId = ++slotsRequestId;
         timeSlotsArea.classList.add('loading');
         state.time = null;
+
+        if (state.closedDates.has(state.date)) {
+            timeSlots.replaceChildren();
+            noSlotsHint.textContent = 'В этот день запись недоступна';
+            noSlotsHint.classList.remove('hidden');
+            timeSlotsArea.classList.remove('loading');
+            return;
+        }
 
         try {
             const params = new URLSearchParams({
@@ -314,6 +352,7 @@
         state.date = null;
         state.time = null;
         state.weekStart = startOfDay(new Date());
+        state.closedDates = new Set();
         document.getElementById('clientName').value = '';
         document.getElementById('clientPhone').value = '';
         document.getElementById('website').value = '';

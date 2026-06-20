@@ -37,6 +37,24 @@ class LunchBreakForm {
     String lunchBreakEnd
 }
 
+class ClosedDayForm {
+    String fromDate
+    String toDate
+    String label
+}
+
+class WeekendsForm {
+    Boolean weekendsClosed = true
+}
+
+class ClosedDayViewDto {
+    Long id
+    String fromDate
+    String toDate
+    String label
+    String periodText
+}
+
 class BookingViewDto {
     Long id
     String date
@@ -46,6 +64,7 @@ class BookingViewDto {
     BigDecimal price
     String clientName
     String clientPhone
+    String createdAt
 }
 
 class AvailableSlotsDayDto {

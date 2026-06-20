@@ -1,6 +1,7 @@
 # Лёгкий образ для VPS: JAR собирается на ПК (gradlew bootJar), не на сервере
 FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
+ENV TZ=Europe/Moscow
 COPY build/libs/*.jar app.jar
 ENV JAVA_OPTS="-XX:+UseSerialGC -Xms128m -Xmx384m"
 EXPOSE 8080

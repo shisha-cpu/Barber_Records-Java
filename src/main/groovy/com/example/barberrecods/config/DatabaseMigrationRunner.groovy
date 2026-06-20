@@ -20,6 +20,7 @@ class DatabaseMigrationRunner implements ApplicationRunner {
     void run(ApplicationArguments args) {
         migrateSalonSettings()
         migrateBookings()
+        migrateClosedDays()
     }
 
     private void migrateSalonSettings() {
@@ -47,6 +48,10 @@ class DatabaseMigrationRunner implements ApplicationRunner {
             ALTER TABLE salon_settings
             ADD COLUMN IF NOT EXISTS max_bookings_per_ip_per_day INTEGER NOT NULL DEFAULT 20
         ''')
+        jdbcTemplate.execute('''
+            ALTER TABLE salon_settings
+            ADD COLUMN IF NOT EXISTS weekends_closed BOOLEAN NOT NULL DEFAULT true
+        ''')
 
         jdbcTemplate.update('''
             INSERT INTO salon_settings (id, lunch_break_start, lunch_break_end,
@@ -61,6 +66,21 @@ class DatabaseMigrationRunner implements ApplicationRunner {
         jdbcTemplate.execute('''
             ALTER TABLE bookings
             ADD COLUMN IF NOT EXISTS client_ip VARCHAR(64)
+        ''')
+        jdbcTemplate.execute('''
+            ALTER TABLE bookings
+            ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        ''')
+    }
+
+    private void migrateClosedDays() {
+        jdbcTemplate.execute('''
+            CREATE TABLE IF NOT EXISTS salon_closed_days (
+                id BIGSERIAL PRIMARY KEY,
+                from_date DATE NOT NULL,
+                to_date DATE NOT NULL,
+                label VARCHAR(128)
+            )
         ''')
     }
 }

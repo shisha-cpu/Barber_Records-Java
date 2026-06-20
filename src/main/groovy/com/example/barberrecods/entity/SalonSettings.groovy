@@ -27,4 +27,7 @@ class SalonSettings {
 
     @Column(name = 'max_bookings_per_ip_per_day', nullable = false)
     Integer maxBookingsPerIpPerDay = 20
+
+    @Column(name = 'weekends_closed', nullable = false)
+    Boolean weekendsClosed = true
 }

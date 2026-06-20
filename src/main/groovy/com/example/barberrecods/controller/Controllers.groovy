@@ -1,10 +1,12 @@
 package com.example.barberrecods.controller
 
 import com.example.barberrecods.dto.BookingRequest
+import com.example.barberrecods.dto.ClosedDayForm
 import com.example.barberrecods.dto.AvailableSlotsDto
 import com.example.barberrecods.dto.BookingViewDto
 import com.example.barberrecods.dto.LimitsForm
 import com.example.barberrecods.dto.LunchBreakForm
+import com.example.barberrecods.dto.WeekendsForm
 import com.example.barberrecods.dto.ServiceForm
 import com.example.barberrecods.entity.Booking
 import com.example.barberrecods.entity.SalonSettings
@@ -12,6 +14,7 @@ import com.example.barberrecods.service.AvailableSlotsPdfService
 import com.example.barberrecods.service.BackupService
 import com.example.barberrecods.service.BarberServiceService
 import com.example.barberrecods.service.BookingService
+import com.example.barberrecods.service.ClosedDaysService
 import com.example.barberrecods.service.SalonSettingsService
 import com.example.barberrecods.util.ClientIpUtils
 import jakarta.servlet.http.HttpServletRequest
@@ -48,10 +51,14 @@ class PublicApiController {
 
     private final BarberServiceService barberServiceService
     private final BookingService bookingService
+    private final ClosedDaysService closedDaysService
 
-    PublicApiController(BarberServiceService barberServiceService, BookingService bookingService) {
+    PublicApiController(BarberServiceService barberServiceService,
+                        BookingService bookingService,
+                        ClosedDaysService closedDaysService) {
         this.barberServiceService = barberServiceService
         this.bookingService = bookingService
+        this.closedDaysService = closedDaysService
     }
 
     @GetMapping('/services')
@@ -63,6 +70,12 @@ class PublicApiController {
     List<String> getAvailableTimes(@RequestParam('serviceId') Long serviceId,
                                    @RequestParam('date') String date) {
         bookingService.getAvailableTimes(serviceId, LocalDate.parse(date))
+    }
+
+    @GetMapping('/closed-days')
+    List<String> getClosedDays(@RequestParam('from') String from,
+                               @RequestParam('to') String to) {
+        closedDaysService.getClosedIsoDatesBetween(LocalDate.parse(from), LocalDate.parse(to))
     }
 
     @PostMapping('/bookings')
@@ -89,15 +102,18 @@ class AdminController {
     private final BarberServiceService barberServiceService
     private final BookingService bookingService
     private final SalonSettingsService salonSettingsService
+    private final ClosedDaysService closedDaysService
     private final BackupService backupService
 
     AdminController(BarberServiceService barberServiceService,
                     BookingService bookingService,
                     SalonSettingsService salonSettingsService,
+                    ClosedDaysService closedDaysService,
                     BackupService backupService) {
         this.barberServiceService = barberServiceService
         this.bookingService = bookingService
         this.salonSettingsService = salonSettingsService
+        this.closedDaysService = closedDaysService
         this.backupService = backupService
     }
 
@@ -124,6 +140,9 @@ class AdminController {
                 maxBookingsPerIpPerDay: settings.maxBookingsPerIpPerDay
         ))
         model.addAttribute('backups', backupService.listBackups())
+        model.addAttribute('closedDayForm', new ClosedDayForm())
+        model.addAttribute('weekendsForm', new WeekendsForm(weekendsClosed: closedDaysService.isWeekendsClosed()))
+        model.addAttribute('closedDays', closedDaysService.listAll())
         'admin/dashboard'
     }
 
@@ -194,6 +213,30 @@ class AdminController {
         'redirect:/admin?tab=settings'
     }
 
+    @PostMapping('/settings/closed-days')
+    String addClosedDay(@ModelAttribute ClosedDayForm closedDayForm) {
+        try {
+            closedDaysService.add(closedDayForm)
+        } catch (IllegalArgumentException ignored) {
+        }
+        'redirect:/admin?tab=settings'
+    }
+
+    @PostMapping('/settings/weekends')
+    String updateWeekends(@ModelAttribute WeekendsForm weekendsForm) {
+        closedDaysService.updateWeekendsClosed(weekendsForm.weekendsClosed == true)
+        'redirect:/admin?tab=settings'
+    }
+
+    @PostMapping('/settings/closed-days/{id}/delete')
+    String deleteClosedDay(@PathVariable('id') Long id) {
+        try {
+            closedDaysService.delete(id)
+        } catch (IllegalArgumentException ignored) {
+        }
+        'redirect:/admin?tab=settings'
+    }
+
     @PostMapping('/bookings/{id}/delete')
     String deleteBooking(@PathVariable('id') Long id) {
         try {
@@ -253,7 +296,8 @@ class AdminApiController {
                 durationMinutes: booking.service.durationMinutes,
                 price: booking.service.price,
                 clientName: booking.clientName,
-                clientPhone: booking.clientPhone
+                clientPhone: booking.clientPhone,
+                createdAt: BookingService.formatCreatedAt(booking.createdAt)
         )
     }
 }
