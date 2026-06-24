@@ -206,7 +206,17 @@ input[type="time"]:focus {
     overflow-y: auto;
 }
 
+.service-item.selected::after {
+    content: '✓';
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    color: var(--primary);
+    font-weight: 700;
+}
+
 .service-item {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: flex-start;

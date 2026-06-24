@@ -24,9 +24,12 @@ import java.time.format.DateTimeFormatter
 class BarberServiceService {
 
     private final BarberServiceRepository serviceRepository
+    private final BookingRepository bookingRepository
 
-    BarberServiceService(BarberServiceRepository serviceRepository) {
+    BarberServiceService(BarberServiceRepository serviceRepository,
+                         BookingRepository bookingRepository) {
         this.serviceRepository = serviceRepository
+        this.bookingRepository = bookingRepository
     }
 
     List<ServiceDto> getActiveServices() {
@@ -66,6 +69,10 @@ class BarberServiceService {
         if (!serviceRepository.existsById(id)) {
             throw new IllegalArgumentException('Услуга не найдена')
         }
+        if (bookingRepository.countByServices_Id(id) > 0) {
+            throw new IllegalArgumentException(
+                    'Нельзя удалить услугу: есть записи с этой услугой. Снимите галочку «Активна», чтобы скрыть её.')
+        }
         serviceRepository.deleteById(id)
     }
 
@@ -102,6 +109,7 @@ class BookingService {
     private final AppProperties appProperties
     private final SalonSettingsService salonSettingsService
     private final ClosedDaysService closedDaysService
+    private final WorkHoursOverrideService workHoursOverrideService
     private final BookingProtectionService bookingProtectionService
 
     BookingService(BookingRepository bookingRepository,
@@ -109,12 +117,14 @@ class BookingService {
                    AppProperties appProperties,
                    SalonSettingsService salonSettingsService,
                    ClosedDaysService closedDaysService,
+                   WorkHoursOverrideService workHoursOverrideService,
                    BookingProtectionService bookingProtectionService) {
         this.bookingRepository = bookingRepository
         this.serviceRepository = serviceRepository
         this.appProperties = appProperties
         this.salonSettingsService = salonSettingsService
         this.closedDaysService = closedDaysService
+        this.workHoursOverrideService = workHoursOverrideService
         this.bookingProtectionService = bookingProtectionService
     }
 
@@ -162,13 +172,9 @@ class BookingService {
         )
     }
 
-    List<String> getAvailableTimes(Long serviceId, LocalDate date) {
-        BarberService service = serviceRepository.findById(serviceId)
-                .orElseThrow { new IllegalArgumentException('Услуга не найдена') }
-
-        if (!service.active) {
-            throw new IllegalArgumentException('Услуга недоступна')
-        }
+    List<String> getAvailableTimes(List<Long> serviceIds, LocalDate date) {
+        List<BarberService> services = loadActiveServices(serviceIds)
+        int totalDuration = totalDurationMinutes(services)
 
         if (date.isBefore(today())) {
             return []
@@ -178,8 +184,9 @@ class BookingService {
             return []
         }
 
-        LocalTime workStart = LocalTime.parse(appProperties.workingHours.start)
-        LocalTime workEnd = LocalTime.parse(appProperties.workingHours.end)
+        WorkHoursOverrideService.ResolvedWorkHours workHours = workHoursOverrideService.resolveForDate(date)
+        LocalTime workStart = workHours.start
+        LocalTime workEnd = workHours.end
         int interval = appProperties.slotIntervalMinutes
         LocalDate today = today()
         LocalTime now = now()
@@ -188,19 +195,23 @@ class BookingService {
         List<String> slots = []
 
         LocalTime slot = workStart
-        while (!slot.plusMinutes(service.durationMinutes).isAfter(workEnd)) {
+        while (!slot.plusMinutes(totalDuration).isAfter(workEnd)) {
             if (date.equals(today) && !slot.isAfter(now)) {
                 slot = slot.plusMinutes(interval)
                 continue
             }
 
-            if (isSlotFree(slot, service.durationMinutes, dayBookings)
-                    && !overlapsLunchBreak(slot, service.durationMinutes)) {
+            if (isSlotFree(slot, totalDuration, dayBookings)
+                    && !overlapsLunchBreak(slot, totalDuration)) {
                 slots << slot.format(TIME_FORMAT)
             }
             slot = slot.plusMinutes(interval)
         }
         slots
+    }
+
+    List<String> getAvailableTimes(Long serviceId, LocalDate date) {
+        getAvailableTimes([serviceId], date)
     }
 
     @Transactional
@@ -215,12 +226,9 @@ class BookingService {
         bookingProtectionService.validate(request, clientIp)
         String normalizedPhone = BookingProtectionService.normalizePhone(request.clientPhone)
 
-        BarberService service = serviceRepository.findById(request.serviceId)
-                .orElseThrow { new IllegalArgumentException('Услуга не найдена') }
-
-        if (!service.active) {
-            throw new IllegalArgumentException('Услуга недоступна')
-        }
+        List<Long> serviceIds = resolveServiceIds(request)
+        List<BarberService> services = loadActiveServices(serviceIds)
+        int totalDuration = totalDurationMinutes(services)
 
         LocalDate date = LocalDate.parse(request.date)
         LocalTime time = LocalTime.parse(request.time, TIME_FORMAT)
@@ -238,24 +246,25 @@ class BookingService {
             throw new IllegalArgumentException('На эту дату запись недоступна')
         }
 
-        LocalTime workStart = LocalTime.parse(appProperties.workingHours.start)
-        LocalTime workEnd = LocalTime.parse(appProperties.workingHours.end)
+        WorkHoursOverrideService.ResolvedWorkHours workHours = workHoursOverrideService.resolveForDate(date)
+        LocalTime workStart = workHours.start
+        LocalTime workEnd = workHours.end
 
-        if (time.isBefore(workStart) || time.plusMinutes(service.durationMinutes).isAfter(workEnd)) {
+        if (time.isBefore(workStart) || time.plusMinutes(totalDuration).isAfter(workEnd)) {
             throw new IllegalArgumentException('Выбранное время вне рабочих часов')
         }
 
-        if (overlapsLunchBreak(time, service.durationMinutes)) {
+        if (overlapsLunchBreak(time, totalDuration)) {
             throw new IllegalArgumentException('Это время недоступно')
         }
 
         List<Booking> dayBookings = bookingRepository.findByBookingDateOrderByBookingTimeAsc(date)
-        if (!isSlotFree(time, service.durationMinutes, dayBookings)) {
+        if (!isSlotFree(time, totalDuration, dayBookings)) {
             throw new IllegalArgumentException('Это время уже занято')
         }
 
         bookingRepository.save(new Booking(
-                service: service,
+                services: services,
                 bookingDate: date,
                 bookingTime: time,
                 clientName: request.clientName.trim(),
@@ -263,6 +272,33 @@ class BookingService {
                 clientIp: clientIp,
                 createdAt: LocalDateTime.now(salonZone())
         ))
+    }
+
+    private static List<Long> resolveServiceIds(BookingRequest request) {
+        List<Long> ids = request.serviceIds?.findAll { it != null } ?: []
+        if (ids.isEmpty() && request.serviceId != null) {
+            ids = [request.serviceId]
+        }
+        ids = ids.unique()
+        if (ids.isEmpty()) {
+            throw new IllegalArgumentException('Выберите хотя бы одну услугу')
+        }
+        ids
+    }
+
+    private List<BarberService> loadActiveServices(List<Long> serviceIds) {
+        List<BarberService> services = serviceRepository.findAllById(serviceIds)
+        if (services.size() != serviceIds.size()) {
+            throw new IllegalArgumentException('Услуга не найдена')
+        }
+        if (services.any { !it.active }) {
+            throw new IllegalArgumentException('Услуга недоступна')
+        }
+        services.sort { a, b -> serviceIds.indexOf(a.id) <=> serviceIds.indexOf(b.id) }
+    }
+
+    private static int totalDurationMinutes(List<BarberService> services) {
+        services.sum { it.durationMinutes } as int
     }
 
     private ZoneId salonZone() {
@@ -298,7 +334,7 @@ class BookingService {
         LocalTime end = start.plusMinutes(durationMinutes)
         !bookings.any { booking ->
             LocalTime bookingStart = booking.bookingTime
-            LocalTime bookingEnd = bookingStart.plusMinutes(booking.service.durationMinutes)
+            LocalTime bookingEnd = bookingStart.plusMinutes(booking.totalDurationMinutes)
             start < bookingEnd && end > bookingStart
         }
     }

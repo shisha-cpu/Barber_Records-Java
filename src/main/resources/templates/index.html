@@ -13,7 +13,7 @@
         <div class="welcome-inner">
     
             <h1>Запись на стрижку</h1>
-            <p class="subtitle">Выберите услугу, дату и время — быстро и удобно.</p>
+            <p class="subtitle">Выберите услуги, дату и время — быстро и удобно.</p>
             <button type="button" class="btn btn-primary btn-xl" id="startBookingBtn">Записаться</button>
         </div>
     </section>
@@ -21,14 +21,15 @@
     <section class="quiz hidden" id="quizFlow">
         <div class="quiz-inner">
             <div class="progress">
-                <div class="progress-step active" data-step="1">Услуга</div>
+                <div class="progress-step active" data-step="1">Услуги</div>
                 <div class="progress-step" data-step="2">Дата и время</div>
                 <div class="progress-step" data-step="3">Контакты</div>
                 <div class="progress-step" data-step="4">Подтверждение</div>
             </div>
 
             <div class="quiz-panel" data-panel="1">
-                <h2>Выберите услугу</h2>
+                <h2>Выберите услуги</h2>
+                <p class="hint">Можно выбрать несколько — нажмите на каждую нужную услугу.</p>
                 <input type="search" class="search-input" id="serviceSearch" placeholder="Поиск услуги...">
                 <div class="service-list" id="serviceList">
                     <button type="button" class="service-item"

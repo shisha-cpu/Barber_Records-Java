@@ -1,6 +1,7 @@
 package com.example.barberrecods.entity
 
 import jakarta.persistence.*
+import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -13,9 +14,13 @@ class Booking {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id
 
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = 'service_id', nullable = false)
-    BarberService service
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = 'booking_services',
+            joinColumns = @JoinColumn(name = 'booking_id'),
+            inverseJoinColumns = @JoinColumn(name = 'service_id')
+    )
+    List<BarberService> services = []
 
     @Column(name = 'booking_date', nullable = false)
     LocalDate bookingDate
@@ -34,4 +39,16 @@ class Booking {
 
     @Column(name = 'client_ip')
     String clientIp
+
+    int getTotalDurationMinutes() {
+        services?.sum { it.durationMinutes } ?: 0
+    }
+
+    BigDecimal getTotalPrice() {
+        services?.collect { it.price }?.inject(BigDecimal.ZERO) { acc, price -> acc + price } ?: BigDecimal.ZERO
+    }
+
+    String getServiceNames() {
+        services?.collect { it.name }?.join(', ') ?: ''
+    }
 }

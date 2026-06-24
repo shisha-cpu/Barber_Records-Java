@@ -2,6 +2,7 @@ package com.example.barberrecods.service
 
 import com.example.barberrecods.dto.LimitsForm
 import com.example.barberrecods.dto.LunchBreakForm
+import com.example.barberrecods.dto.WorkingHoursForm
 import com.example.barberrecods.entity.SalonSettings
 import com.example.barberrecods.repository.SalonSettingsRepository
 import org.springframework.stereotype.Service
@@ -43,6 +44,25 @@ class SalonSettingsService {
         SalonSettings settings = getSettings()
         settings.lunchBreakStart = start
         settings.lunchBreakEnd = end
+        repository.save(settings)
+    }
+
+    @Transactional
+    SalonSettings updateWorkingHours(WorkingHoursForm form) {
+        if (!form.workStart?.trim() || !form.workEnd?.trim()) {
+            throw new IllegalArgumentException('Укажите время работы')
+        }
+
+        LocalTime start = LocalTime.parse(form.workStart.trim(), TIME_FORMAT)
+        LocalTime end = LocalTime.parse(form.workEnd.trim(), TIME_FORMAT)
+
+        if (!start.isBefore(end)) {
+            throw new IllegalArgumentException('Время начала должно быть раньше окончания')
+        }
+
+        SalonSettings settings = getSettings()
+        settings.workStart = start
+        settings.workEnd = end
         repository.save(settings)
     }
 

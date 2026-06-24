@@ -7,6 +7,8 @@ import com.example.barberrecods.dto.BookingViewDto
 import com.example.barberrecods.dto.LimitsForm
 import com.example.barberrecods.dto.LunchBreakForm
 import com.example.barberrecods.dto.WeekendsForm
+import com.example.barberrecods.dto.WorkHoursOverrideForm
+import com.example.barberrecods.dto.WorkingHoursForm
 import com.example.barberrecods.dto.ServiceForm
 import com.example.barberrecods.entity.Booking
 import com.example.barberrecods.entity.SalonSettings
@@ -16,6 +18,7 @@ import com.example.barberrecods.service.BarberServiceService
 import com.example.barberrecods.service.BookingService
 import com.example.barberrecods.service.ClosedDaysService
 import com.example.barberrecods.service.SalonSettingsService
+import com.example.barberrecods.service.WorkHoursOverrideService
 import com.example.barberrecods.util.ClientIpUtils
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.core.io.UrlResource
@@ -25,6 +28,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.servlet.mvc.support.RedirectAttributes
 
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -67,9 +71,17 @@ class PublicApiController {
     }
 
     @GetMapping('/times')
-    List<String> getAvailableTimes(@RequestParam('serviceId') Long serviceId,
+    List<String> getAvailableTimes(@RequestParam(value = 'serviceId', required = false) Long serviceId,
+                                   @RequestParam(value = 'serviceIds', required = false) List<Long> serviceIds,
                                    @RequestParam('date') String date) {
-        bookingService.getAvailableTimes(serviceId, LocalDate.parse(date))
+        List<Long> ids = serviceIds?.findAll { it != null } ?: []
+        if (ids.isEmpty() && serviceId != null) {
+            ids = [serviceId]
+        }
+        if (ids.isEmpty()) {
+            throw new IllegalArgumentException('Выберите хотя бы одну услугу')
+        }
+        bookingService.getAvailableTimes(ids, LocalDate.parse(date))
     }
 
     @GetMapping('/closed-days')
@@ -103,17 +115,20 @@ class AdminController {
     private final BookingService bookingService
     private final SalonSettingsService salonSettingsService
     private final ClosedDaysService closedDaysService
+    private final WorkHoursOverrideService workHoursOverrideService
     private final BackupService backupService
 
     AdminController(BarberServiceService barberServiceService,
                     BookingService bookingService,
                     SalonSettingsService salonSettingsService,
                     ClosedDaysService closedDaysService,
+                    WorkHoursOverrideService workHoursOverrideService,
                     BackupService backupService) {
         this.barberServiceService = barberServiceService
         this.bookingService = bookingService
         this.salonSettingsService = salonSettingsService
         this.closedDaysService = closedDaysService
+        this.workHoursOverrideService = workHoursOverrideService
         this.backupService = backupService
     }
 
@@ -133,6 +148,10 @@ class AdminController {
                 lunchBreakStart: settings.lunchBreakStart.format(TIME_FORMAT),
                 lunchBreakEnd: settings.lunchBreakEnd.format(TIME_FORMAT)
         ))
+        model.addAttribute('workingHoursForm', new WorkingHoursForm(
+                workStart: settings.workStart.format(TIME_FORMAT),
+                workEnd: settings.workEnd.format(TIME_FORMAT)
+        ))
         model.addAttribute('limitsForm', new LimitsForm(
                 maxActiveBookingsPerPhone: settings.maxActiveBookingsPerPhone,
                 maxBookingsPerPhonePerDay: settings.maxBookingsPerPhonePerDay,
@@ -141,6 +160,8 @@ class AdminController {
         ))
         model.addAttribute('backups', backupService.listBackups())
         model.addAttribute('closedDayForm', new ClosedDayForm())
+        model.addAttribute('workHoursOverrideForm', new WorkHoursOverrideForm())
+        model.addAttribute('workHoursOverrides', workHoursOverrideService.listAll())
         model.addAttribute('weekendsForm', new WeekendsForm(weekendsClosed: closedDaysService.isWeekendsClosed()))
         model.addAttribute('closedDays', closedDaysService.listAll())
         'admin/dashboard'
@@ -165,10 +186,11 @@ class AdminController {
     }
 
     @PostMapping('/services/{id}/delete')
-    String deleteService(@PathVariable('id') Long id) {
+    String deleteService(@PathVariable('id') Long id, RedirectAttributes redirectAttributes) {
         try {
             barberServiceService.delete(id)
-        } catch (IllegalArgumentException ignored) {
+        } catch (IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute('serviceError', e.message)
         }
         'redirect:/admin?tab=services'
     }
@@ -202,6 +224,33 @@ class AdminController {
         } catch (IllegalArgumentException e) {
             ResponseEntity.notFound().build()
         }
+    }
+
+    @PostMapping('/settings/work-hours-overrides')
+    String addWorkHoursOverride(@ModelAttribute WorkHoursOverrideForm workHoursOverrideForm) {
+        try {
+            workHoursOverrideService.add(workHoursOverrideForm)
+        } catch (IllegalArgumentException ignored) {
+        }
+        'redirect:/admin?tab=settings'
+    }
+
+    @PostMapping('/settings/work-hours-overrides/{id}/delete')
+    String deleteWorkHoursOverride(@PathVariable('id') Long id) {
+        try {
+            workHoursOverrideService.delete(id)
+        } catch (IllegalArgumentException ignored) {
+        }
+        'redirect:/admin?tab=settings'
+    }
+
+    @PostMapping('/settings/working-hours')
+    String updateWorkingHours(@ModelAttribute WorkingHoursForm workingHoursForm) {
+        try {
+            salonSettingsService.updateWorkingHours(workingHoursForm)
+        } catch (IllegalArgumentException ignored) {
+        }
+        'redirect:/admin?tab=settings'
     }
 
     @PostMapping('/settings/lunch-break')
@@ -292,9 +341,9 @@ class AdminApiController {
                 id: booking.id,
                 date: booking.bookingDate.format(DATE_FORMAT),
                 time: booking.bookingTime.format(TIME_FORMAT),
-                serviceName: booking.service.name,
-                durationMinutes: booking.service.durationMinutes,
-                price: booking.service.price,
+                serviceName: booking.serviceNames,
+                durationMinutes: booking.totalDurationMinutes,
+                price: booking.totalPrice,
                 clientName: booking.clientName,
                 clientPhone: booking.clientPhone,
                 createdAt: BookingService.formatCreatedAt(booking.createdAt)

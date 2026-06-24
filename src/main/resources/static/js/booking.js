@@ -5,7 +5,7 @@
 
     const state = {
         step: 0,
-        service: null,
+        services: [],
         date: null,
         time: null,
         weekStart: startOfDay(new Date()),
@@ -111,14 +111,20 @@
     }
 
     function selectService(item) {
-        document.querySelectorAll('.service-item').forEach((el) => el.classList.remove('selected'));
-        item.classList.add('selected');
-        state.service = {
+        const service = {
             id: item.dataset.id,
             name: item.dataset.name,
             duration: item.dataset.duration,
             price: item.dataset.price
         };
+        const index = state.services.findIndex((s) => s.id === service.id);
+        if (index >= 0) {
+            state.services.splice(index, 1);
+            item.classList.remove('selected');
+        } else {
+            state.services.push(service);
+            item.classList.add('selected');
+        }
     }
 
     function filterServices() {
@@ -257,7 +263,7 @@
     }
 
     async function loadTimeSlots() {
-        if (!state.service || !state.date) return;
+        if (!state.services.length || !state.date) return;
 
         const requestId = ++slotsRequestId;
         timeSlotsArea.classList.add('loading');
@@ -272,10 +278,8 @@
         }
 
         try {
-            const params = new URLSearchParams({
-                serviceId: state.service.id,
-                date: state.date
-            });
+            const params = new URLSearchParams({ date: state.date });
+            state.services.forEach((service) => params.append('serviceIds', service.id));
             const response = await fetch(`/api/times?${params}`);
             const times = await response.json();
 
@@ -304,9 +308,11 @@
     }
 
     function fillPreview() {
-        document.getElementById('previewService').textContent = state.service.name;
-        document.getElementById('previewDuration').textContent = `${state.service.duration} мин`;
-        document.getElementById('previewPrice').textContent = formatPrice(state.service.price);
+        const totalDuration = state.services.reduce((sum, service) => sum + Number(service.duration), 0);
+        const totalPrice = state.services.reduce((sum, service) => sum + Number(service.price), 0);
+        document.getElementById('previewService').textContent = state.services.map((s) => s.name).join(', ');
+        document.getElementById('previewDuration').textContent = `${totalDuration} мин`;
+        document.getElementById('previewPrice').textContent = formatPrice(totalPrice);
         document.getElementById('previewDate').textContent = formatDateLabel(state.date);
         document.getElementById('previewTime').textContent = state.time;
         document.getElementById('previewName').textContent = document.getElementById('clientName').value.trim();
@@ -316,7 +322,7 @@
     async function submitBooking() {
         clearMessages();
         const payload = {
-            serviceId: Number(state.service.id),
+            serviceIds: state.services.map((service) => Number(service.id)),
             date: state.date,
             time: state.time,
             clientName: document.getElementById('clientName').value.trim(),
@@ -348,7 +354,7 @@
 
     function goHome() {
         state.step = 0;
-        state.service = null;
+        state.services = [];
         state.date = null;
         state.time = null;
         state.weekStart = startOfDay(new Date());
@@ -367,8 +373,8 @@
     }
 
     function validateStep(step) {
-        if (step === 1 && !state.service) {
-            showError('Выберите услугу');
+        if (step === 1 && !state.services.length) {
+            showError('Выберите хотя бы одну услугу');
             return false;
         }
         if (step === 2) {

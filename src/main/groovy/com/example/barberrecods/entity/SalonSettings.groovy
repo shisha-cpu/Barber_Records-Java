@@ -16,6 +16,12 @@ class SalonSettings {
     @Column(name = 'lunch_break_end', nullable = false)
     LocalTime lunchBreakEnd = LocalTime.of(15, 0)
 
+    @Column(name = 'work_start', nullable = false)
+    LocalTime workStart = LocalTime.of(9, 0)
+
+    @Column(name = 'work_end', nullable = false)
+    LocalTime workEnd = LocalTime.of(20, 0)
+
     @Column(name = 'max_active_bookings_per_phone', nullable = false)
     Integer maxActiveBookingsPerPhone = 2
 

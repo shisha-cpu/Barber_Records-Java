@@ -33,4 +33,6 @@ interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query('''SELECT COUNT(b) FROM Booking b
               WHERE b.clientIp = :ip AND b.createdAt >= :since''')
     long countByClientIpSince(@Param('ip') String ip, @Param('since') LocalDateTime since)
+
+    long countByServices_Id(Long serviceId)
 }

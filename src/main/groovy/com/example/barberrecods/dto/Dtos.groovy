@@ -11,6 +11,7 @@ class ServiceDto {
 
 class BookingRequest {
     Long serviceId
+    List<Long> serviceIds
     String date
     String time
     String clientName
@@ -35,6 +36,30 @@ class ServiceForm {
 class LunchBreakForm {
     String lunchBreakStart
     String lunchBreakEnd
+}
+
+class WorkingHoursForm {
+    String workStart
+    String workEnd
+}
+
+class WorkHoursOverrideForm {
+    String fromDate
+    String toDate
+    String workStart
+    String workEnd
+    String label
+}
+
+class WorkHoursOverrideViewDto {
+    Long id
+    String fromDate
+    String toDate
+    String workStart
+    String workEnd
+    String label
+    String periodText
+    String hoursText
 }
 
 class ClosedDayForm {

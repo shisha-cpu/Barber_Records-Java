@@ -7,6 +7,7 @@ import com.example.barberrecods.repository.BarberServiceRepository
 import com.example.barberrecods.repository.BookingRepository
 import com.example.barberrecods.repository.SalonClosedDayRepository
 import com.example.barberrecods.repository.SalonSettingsRepository
+import com.example.barberrecods.repository.SalonWorkHoursOverrideRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
@@ -29,6 +30,7 @@ class BackupService {
     private final BookingRepository bookingRepository
     private final SalonSettingsRepository settingsRepository
     private final SalonClosedDayRepository closedDayRepository
+    private final SalonWorkHoursOverrideRepository workHoursOverrideRepository
     private final ObjectMapper objectMapper
     private final Path backupDir
 
@@ -36,11 +38,13 @@ class BackupService {
                   BookingRepository bookingRepository,
                   SalonSettingsRepository settingsRepository,
                   SalonClosedDayRepository closedDayRepository,
+                  SalonWorkHoursOverrideRepository workHoursOverrideRepository,
                   @Value('${app.backups.path:backups}') String backupPath) {
         this.serviceRepository = serviceRepository
         this.bookingRepository = bookingRepository
         this.settingsRepository = settingsRepository
         this.closedDayRepository = closedDayRepository
+        this.workHoursOverrideRepository = workHoursOverrideRepository
         this.objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
@@ -57,7 +61,8 @@ class BackupService {
                 services : serviceRepository.findAll(),
                 bookings : bookingRepository.findAll(),
                 settings : settingsRepository.findAll(),
-                closedDays: closedDayRepository.findAll()
+                closedDays: closedDayRepository.findAll(),
+                workHoursOverrides: workHoursOverrideRepository.findAll()
         ]
 
         objectMapper.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), payload)
