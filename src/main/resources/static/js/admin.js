@@ -372,3 +372,36 @@
     periodFromInput.value = today;
     periodToInput.value = toIso(new Date(Date.now() + 6 * 86400000));
 })();
+
+(() => {
+    const selectAll = document.getElementById('selectAllServices');
+    const bulkForm = document.getElementById('bulk-delete-services-form');
+    if (!selectAll || !bulkForm) return;
+
+    const getCheckboxes = () => [...document.querySelectorAll('.service-select')];
+
+    selectAll.addEventListener('change', () => {
+        getCheckboxes().forEach((cb) => {
+            cb.checked = selectAll.checked;
+        });
+    });
+
+    document.addEventListener('change', (event) => {
+        if (!event.target.classList.contains('service-select')) return;
+        const boxes = getCheckboxes();
+        selectAll.checked = boxes.length > 0 && boxes.every((cb) => cb.checked);
+        selectAll.indeterminate = boxes.some((cb) => cb.checked) && !selectAll.checked;
+    });
+
+    bulkForm.addEventListener('submit', (event) => {
+        const selected = getCheckboxes().filter((cb) => cb.checked).length;
+        if (selected === 0) {
+            event.preventDefault();
+            alert('Выберите хотя бы одну услугу');
+            return;
+        }
+        if (!confirm('Удалить выбранные услуги?')) {
+            event.preventDefault();
+        }
+    });
+})();

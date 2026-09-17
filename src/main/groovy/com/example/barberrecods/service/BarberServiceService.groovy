@@ -50,7 +50,7 @@ class BarberServiceService {
                 name: form.name.trim(),
                 durationMinutes: form.durationMinutes,
                 price: form.price,
-                active: form.active != null ? form.active : true
+                active: true
         ))
     }
 
@@ -61,7 +61,7 @@ class BarberServiceService {
         service.name = form.name.trim()
         service.durationMinutes = form.durationMinutes
         service.price = form.price
-        service.active = form.active != null ? form.active : true
+        service.active = true
         serviceRepository.save(service)
     }
 
@@ -71,9 +71,30 @@ class BarberServiceService {
         }
         if (bookingRepository.countByServices_Id(id) > 0) {
             throw new IllegalArgumentException(
-                    'Нельзя удалить услугу: есть записи с этой услугой. Снимите галочку «Активна», чтобы скрыть её.')
+                    'Нельзя удалить услугу: есть записи с этой услугой.')
         }
         serviceRepository.deleteById(id)
+    }
+
+    void deleteMany(List<Long> ids) {
+        List<Long> uniqueIds = ids?.findAll { it != null }?.unique() ?: []
+        if (uniqueIds.isEmpty()) {
+            throw new IllegalArgumentException('Выберите хотя бы одну услугу')
+        }
+        List<String> errors = []
+        int deleted = 0
+        uniqueIds.each { Long id ->
+            try {
+                delete(id)
+                deleted++
+            } catch (IllegalArgumentException e) {
+                errors << e.message
+            }
+        }
+        if (!errors.isEmpty()) {
+            String prefix = deleted > 0 ? "Удалено: ${deleted}. " : ''
+            throw new IllegalArgumentException(prefix + errors.unique().join(' '))
+        }
     }
 
     private static void validateForm(ServiceForm form) {

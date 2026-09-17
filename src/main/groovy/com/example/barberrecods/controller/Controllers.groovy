@@ -176,7 +176,7 @@ class AdminController {
         'redirect:/admin?tab=services'
     }
 
-    @PostMapping('/services/{id}')
+    @PostMapping('/services/{id:\\d+}')
     String updateService(@PathVariable('id') Long id, @ModelAttribute ServiceForm serviceForm) {
         try {
             barberServiceService.update(id, serviceForm)
@@ -185,10 +185,21 @@ class AdminController {
         'redirect:/admin?tab=services'
     }
 
-    @PostMapping('/services/{id}/delete')
+    @PostMapping('/services/{id:\\d+}/delete')
     String deleteService(@PathVariable('id') Long id, RedirectAttributes redirectAttributes) {
         try {
             barberServiceService.delete(id)
+        } catch (IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute('serviceError', e.message)
+        }
+        'redirect:/admin?tab=services'
+    }
+
+    @PostMapping('/services/bulk-delete')
+    String deleteServicesBulk(@RequestParam(value = 'ids', required = false) List<Long> ids,
+                              RedirectAttributes redirectAttributes) {
+        try {
+            barberServiceService.deleteMany(ids)
         } catch (IllegalArgumentException e) {
             redirectAttributes.addFlashAttribute('serviceError', e.message)
         }

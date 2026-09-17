@@ -717,6 +717,17 @@ input[type="time"] {
     overflow-x: visible;
 }
 
+.bulk-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
+.services-table .col-check {
+    width: 40px;
+    text-align: center;
+}
+
 .services-table td .inline-form {
     display: block;
     margin-top: 8px;
@@ -1085,6 +1096,14 @@ th {
     }
 
     .services-table td.actions::before {
+        display: none;
+    }
+
+    .services-table td.col-check {
+        padding-bottom: 4px;
+    }
+
+    .services-table td.col-check::before {
         display: none;
     }
 

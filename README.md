@@ -43,7 +43,8 @@ $env:APP_ADMIN_PASSWORD = "ваш_пароль"
 
 ## Подробная инструкция
 
-См. [INSTRUCTIONS.md](INSTRUCTIONS.md)
+- Локальный запуск и админка: [INSTRUCTIONS.md](INSTRUCTIONS.md)
+- **Деплой / обновление на VPS по SSH:** раздел «Деплой и обновление на сервере» в [INSTRUCTIONS.md](INSTRUCTIONS.md)
 
 ## Стек
 
